@@ -1,0 +1,231 @@
+"use client";
+
+import React, { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Icon,
+  Button,
+  Card,
+  Badge,
+  ProgressBar,
+  Reveal,
+} from "@/components/ui/components";
+import { mission, agents, Agent } from "@/lib/data";
+
+interface AgentChatProps {
+  agent: Agent;
+  onClose: () => void;
+}
+
+function AgentChat({ agent, onClose }: AgentChatProps) {
+  const [msgs, setMsgs] = useState<{ from: string; text: string }[]>([]);
+  const [typing, setTyping] = useState(false);
+  const [input, setInput] = useState("");
+  const [idx, setIdx] = useState(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // play scripted messages in sequence
+  useEffect(() => {
+    if (idx >= agent.messages.length) return;
+    const m = agent.messages[idx];
+    if (m.from === "agent") {
+      setTyping(true);
+      const t = setTimeout(() => {
+        setTyping(false);
+        setMsgs((p) => [...p, m]);
+        setIdx((i) => i + 1);
+      }, idx === 0 ? 600 : 1100);
+      return () => clearTimeout(t);
+    } else {
+      // user line auto-appears slightly after previous
+      const t = setTimeout(() => {
+        setMsgs((p) => [...p, m]);
+        setIdx((i) => i + 1);
+      }, 700);
+      return () => clearTimeout(t);
+    }
+  }, [idx, agent]);
+
+  useEffect(() => {
+    if (bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+    }
+  }, [msgs, typing]);
+
+  const send = () => {
+    if (!input.trim()) return;
+    setMsgs((p) => [...p, { from: "user", text: input.trim() }]);
+    const currentInput = input.trim();
+    setInput("");
+    setTyping(true);
+    setTimeout(() => {
+      setTyping(false);
+      setMsgs((p) => [...p, { from: "agent", text: cannedReply(agent) }]);
+    }, 1200);
+  };
+
+  return (
+    <div className="chat-overlay" onClick={onClose}>
+      <div className="chat-panel" onClick={(e) => e.stopPropagation()} style={{ animation: "slideUp .3s cubic-bezier(.22,1,.36,1)" }}>
+        <div className="chat-head">
+          <div className="avatar" style={{ width: 38, height: 38, background: `color-mix(in oklch, ${agent.color} 20%, transparent)`, color: agent.color, border: `1px solid color-mix(in oklch, ${agent.color} 40%, transparent)`, fontSize: 13 }}>
+            {agent.avatar}
+          </div>
+          <div style={{ flex: 1, textAlign: "left" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>{agent.name}</span>
+              <div className="agent-dot" style={{ margin: 0 }} />
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{agent.role}</div>
+          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ padding: 7 }}><Icon name="x" size={18} /></button>
+        </div>
+        <div className="chat-body" ref={bodyRef}>
+          {msgs.map((m, i) => (
+            <div key={i} className={`bubble ${m.from}`} style={{ animation: "bubbleIn .25s ease", textAlign: "left" }}>{m.text}</div>
+          ))}
+          {typing && <div className="bubble agent typing"><span></span><span></span><span></span></div>}
+        </div>
+        <div className="chat-foot">
+          <input className="chat-input" placeholder={`Message ${agent.name.split(" ")[0]}…`} value={input}
+            onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} />
+          <button className="btn btn-primary btn-md" onClick={send} style={{ padding: 10 }}><Icon name="send" size={16} /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function cannedReply(agent: Agent) {
+  const map: Record<string, string> = {
+    ceo: "Love the energy. Keep patients' trust at the center and you'll do great here.",
+    pm: "Noted — I'll update the ticket. Keep v1 tight and we ship on time.",
+    techlead: "Good thinking. Keep the modules decoupled and write a test or two — I'll review.",
+    reviewer: "Got it. Submit when you're ready and I'll run the full evaluation.",
+  };
+  return map[agent.id] || "Thanks — keep going, you're on the right track.";
+}
+
+export default function MissionPage() {
+  const router = useRouter();
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+  const [active, setActive] = useState<Agent | null>(null);
+
+  return (
+    <div className="app-page">
+      <Reveal>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 26 }}>
+          <div style={{ textAlign: "left" }}>
+            <div className="eyebrow">Mission Workspace</div>
+            <h1 style={{ fontSize: "clamp(26px,3.6vw,38px)", marginTop: 12 }}>{mission.project}</h1>
+          </div>
+          <Button variant="primary" icon="upload" onClick={() => router.push("/submission")}>Submit work</Button>
+        </div>
+      </Reveal>
+
+      <div className="mw-grid">
+        {/* LEFT — virtual company */}
+        <Reveal delay={60}>
+          <Card className="pad" style={{ position: "sticky", top: 96, textAlign: "left" }}>
+            <div className="mw-panel-title">Virtual company</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 11, background: "var(--elevated-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon name="building" size={22} style={{ color: "var(--c-cyan)" }} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{mission.company}</div>
+                <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{mission.companyTag}</div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 20, paddingTop: 18, borderTop: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: ".08em" }}>Your manager</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+                <div className="avatar" style={{ background: "color-mix(in oklch,var(--c-cyan) 18%,transparent)", color: "var(--c-cyan)", border: "1px solid color-mix(in oklch,var(--c-cyan) 35%,transparent)" }}>SC</div>
+                <div><div style={{ fontWeight: 600, fontSize: 14 }}>{mission.manager}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{mission.managerTitle}</div></div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 20, paddingTop: 18, borderTop: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: ".08em" }}>Your role</div>
+              <div style={{ fontWeight: 600, fontSize: 14, marginTop: 8 }}>{mission.role}</div>
+            </div>
+
+            <div style={{ marginTop: 20, paddingTop: 18, borderTop: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted)", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10 }}>
+                <span>Mission status</span><span style={{ color: "var(--accent)" }}>Day {mission.day}/{mission.timeline}</span>
+              </div>
+              <Badge color="var(--accent)"><div className="agent-dot" style={{ margin: 0, width: 6, height: 6 }} /> {mission.status}</Badge>
+              <div style={{ marginTop: 14 }}><ProgressBar value={(mission.day / mission.timeline) * 100} /></div>
+            </div>
+          </Card>
+        </Reveal>
+
+        {/* CENTER — mission brief */}
+        <Reveal delay={120}>
+          <Card className="pad-lg" style={{ textAlign: "left" }}>
+            <Badge color="var(--c-cyan)"><Icon name="briefcase" size={12} /> Project brief</Badge>
+            <h2 style={{ fontSize: 24, marginTop: 16 }}>Build a multilingual hospital support chatbot</h2>
+            <p style={{ color: "var(--text-dim)", fontSize: 15.5, marginTop: 12, lineHeight: 1.6 }}>{mission.summary}</p>
+
+            <div style={{ marginTop: 28 }}>
+              <div className="mw-panel-title">Requirements</div>
+              {mission.requirements.map((r, i) => (
+                <div className="req-item" key={i}>
+                  <div className="req-check"><Icon name="check" size={13} /></div>
+                  <span>{r}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 28 }}>
+              <div className="mw-panel-title">Technical constraints</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {mission.constraints.map((c) => <span className="skill-chip" key={c} style={{ padding: "6px 11px", fontSize: 13 }}>{c}</span>)}
+              </div>
+            </div>
+
+            <div style={{ marginTop: 28 }}>
+              <div className="mw-panel-title">Acceptance criteria</div>
+              {mission.acceptance.map((a, i) => (
+                <div className="req-item" key={i} style={{ borderColor: "var(--border)" }}>
+                  <div className="req-check" style={{ color: "var(--c-amber)" }}><Icon name="target" size={12} /></div>
+                  <span style={{ color: "var(--text-dim)" }}>{a}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 28, paddingTop: 24, borderTop: "1px solid var(--border)" }}>
+              <Button variant="primary" icon="upload" onClick={() => router.push("/submission")}>Submit your work</Button>
+              <Button variant="secondary" icon="link">Open starter repo</Button>
+            </div>
+          </Card>
+        </Reveal>
+
+        {/* RIGHT — AI team */}
+        <Reveal delay={180}>
+          <div style={{ position: "sticky", top: 96 }}>
+            <Card className="pad" style={{ textAlign: "left" }}>
+              <div className="mw-panel-title">Your AI team</div>
+              {agents.map((a) => (
+                <div className="agent-row" key={a.id} onClick={() => setActive(a)}>
+                  <div className="avatar" style={{ width: 36, height: 36, background: `color-mix(in oklch, ${a.color} 18%, transparent)`, color: a.color, border: `1px solid color-mix(in oklch, ${a.color} 35%, transparent)`, fontSize: 12 }}>{a.avatar}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{a.role}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name} · {a.tagline}</div>
+                  </div>
+                  <Icon name="message" size={15} style={{ color: "var(--muted)" }} />
+                </div>
+              ))}
+              <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 6, textAlign: "center", lineHeight: 1.5 }}>
+                Click any teammate to chat. They guide, scope and review — just like real colleagues.
+              </p>
+            </Card>
+          </div>
+        </Reveal>
+      </div>
+
+      {active && <AgentChat agent={active} onClose={() => setActive(null)} />}
+    </div>
+  );
+}
