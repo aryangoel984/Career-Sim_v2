@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Reveal,
@@ -10,7 +10,33 @@ import {
   Icon,
   Button,
 } from "@/components/ui/components";
-import { review as r, ScoreItem } from "@/lib/data";
+import { ScoreItem } from "@/lib/data";
+
+// Shape returned by the API (scores 0-100)
+interface ApiScoreItem {
+  label: string;
+  value: number; // 0-100
+  note: string;
+}
+
+interface ApiEvalItem {
+  title: string;
+  note: string;
+}
+
+interface ApiReview {
+  overall: number; // 0-100
+  scores: ApiScoreItem[];
+  strengths: ApiEvalItem[];
+  weaknesses: ApiEvalItem[];
+  summary: string;
+  verified_skills: string[];
+}
+
+// Convert API score (0-100) to the ScoreItem shape the UI expects (value 0-10)
+function toDisplayScore(s: ApiScoreItem): ScoreItem {
+  return { label: s.label, value: s.value / 10, note: s.note };
+}
 
 interface ScoreCardProps {
   s: ScoreItem;
@@ -34,10 +60,42 @@ function ScoreCard({ s, delay }: ScoreCardProps) {
 
 export default function ReviewPage() {
   const router = useRouter();
+  const [review, setReview] = useState<ApiReview | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    try {
+      const raw = localStorage.getItem("careersim_review");
+      if (!raw) { setNotFound(true); return; }
+      const parsed: ApiReview = JSON.parse(raw);
+      setReview(parsed);
+    } catch {
+      setNotFound(true);
+    }
   }, []);
+
+  if (notFound) {
+    return (
+      <div className="app-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
+        <Icon name="fileText" size={40} style={{ color: "var(--muted)" }} />
+        <h2 style={{ fontSize: 22 }}>No review found</h2>
+        <p style={{ color: "var(--text-dim)", fontSize: 15 }}>Submit your repository first to generate an AI review.</p>
+        <Button variant="primary" icon="upload" onClick={() => router.push("/submission")}>Go to submission</Button>
+      </div>
+    );
+  }
+
+  if (!review) {
+    return (
+      <div className="app-page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+        <span className="spinner" style={{ width: 32, height: 32 }} />
+      </div>
+    );
+  }
+
+  const displayScores = review.scores.map(toDisplayScore);
+  const overallDisplay = review.overall / 10;
 
   return (
     <div className="app-page">
@@ -46,21 +104,31 @@ export default function ReviewPage() {
           <div style={{ textAlign: "left" }}>
             <div className="eyebrow">AI Reviewer · Aisha Khan</div>
             <h1 style={{ fontSize: "clamp(28px,4vw,40px)", marginTop: 12 }}>Submission review</h1>
-            <p style={{ color: "var(--text-dim)", fontSize: 16, marginTop: 8 }}>Hospital Support Chatbot · evaluated against industry standards</p>
+            <p style={{ color: "var(--text-dim)", fontSize: 16, marginTop: 8 }}>
+              Hospital Support Chatbot · evaluated against project brief
+            </p>
           </div>
           <Card className="pad" style={{ display: "flex", alignItems: "center", gap: 18, textAlign: "left" }}>
-            <ScoreRing value={r.overall} max={10} size={96} stroke={8} color="var(--accent)" decimals={1} />
+            <ScoreRing value={overallDisplay} max={10} size={96} stroke={8} color="var(--accent)" decimals={1} />
             <div>
               <div style={{ fontSize: 12, color: "var(--muted)", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: ".08em" }}>Overall score</div>
-              <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4 }}>Strong submit</div>
-              <div style={{ fontSize: 13, color: "var(--good)", marginTop: 2 }}>Top 9% for this mission</div>
+              <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4 }}>
+                {overallDisplay >= 8 ? "Strong submit" : overallDisplay >= 6 ? "Good progress" : "Needs work"}
+              </div>
+              {review.verified_skills.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
+                  {review.verified_skills.map((sk) => (
+                    <Badge key={sk} color="var(--good)" className="">{sk}</Badge>
+                  ))}
+                </div>
+              )}
             </div>
           </Card>
         </div>
       </Reveal>
 
       <div className="score-grid" style={{ marginBottom: 22 }}>
-        {r.scores.map((s, i) => <ScoreCard key={s.label} s={s} delay={i * 70} />)}
+        {displayScores.map((s, i) => <ScoreCard key={s.label} s={s} delay={i * 70} />)}
       </div>
 
       <Reveal delay={120}>
@@ -71,7 +139,7 @@ export default function ReviewPage() {
             </div>
             <div>
               <div className="mw-panel-title" style={{ margin: "4px 0 8px" }}>Reviewer summary</div>
-              <p style={{ fontSize: 15.5, lineHeight: 1.6, color: "var(--text-dim)" }}>{r.summary}</p>
+              <p style={{ fontSize: 15.5, lineHeight: 1.6, color: "var(--text-dim)" }}>{review.summary}</p>
             </div>
           </div>
         </Card>
@@ -84,7 +152,7 @@ export default function ReviewPage() {
               <Icon name="check" size={18} style={{ color: "var(--good)" }} />
               <h3 style={{ fontSize: 17 }}>Strengths</h3>
             </div>
-            {r.strengths.map((s, i) => (
+            {review.strengths.map((s, i) => (
               <div className="sw-item" key={i}>
                 <div className="sw-ic" style={{ background: "color-mix(in oklch,var(--good) 16%,transparent)", color: "var(--good)" }}><Icon name="check" size={15} /></div>
                 <div><div style={{ fontWeight: 600, fontSize: 14.5 }}>{s.title}</div><div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{s.note}</div></div>
@@ -98,7 +166,7 @@ export default function ReviewPage() {
               <Icon name="zap" size={18} style={{ color: "var(--c-amber)" }} />
               <h3 style={{ fontSize: 17 }}>Areas to improve</h3>
             </div>
-            {r.weaknesses.map((s, i) => (
+            {review.weaknesses.map((s, i) => (
               <div className="sw-item" key={i}>
                 <div className="sw-ic" style={{ background: "color-mix(in oklch,var(--c-amber) 16%,transparent)", color: "var(--c-amber)" }}><Icon name="arrowRight" size={15} /></div>
                 <div><div style={{ fontWeight: 600, fontSize: 14.5 }}>{s.title}</div><div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{s.note}</div></div>
@@ -112,6 +180,7 @@ export default function ReviewPage() {
         <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 32 }}>
           <Button variant="primary" size="lg" icon="award" onClick={() => router.push("/passport")}>View skill passport</Button>
           <Button variant="secondary" size="lg" icon="trending" onClick={() => router.push("/report")}>Employability report</Button>
+          <Button variant="ghost" size="lg" icon="upload" onClick={() => router.push("/submission")}>Re-submit</Button>
         </div>
       </Reveal>
     </div>

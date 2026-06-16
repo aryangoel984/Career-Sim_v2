@@ -52,16 +52,84 @@ function AgentChat({ agent, onClose }: AgentChatProps) {
     }
   }, [msgs, typing]);
 
-  const send = () => {
-    if (!input.trim()) return;
-    setMsgs((p) => [...p, { from: "user", text: input.trim() }]);
+  const send = async () => {
+    if (!input.trim() || typing) return;
     const currentInput = input.trim();
     setInput("");
+    
+    // Append the user's message to local chat history state
+    const userMessage = { from: "user" as const, text: currentInput };
+    const nextMsgs = [...msgs, userMessage];
+    setMsgs(nextMsgs);
     setTyping(true);
-    setTimeout(() => {
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const response = await fetch(`${apiUrl}/api/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          agent_id: agent.id,
+          messages: nextMsgs.map((m) => ({
+            role: m.from === "user" ? "user" : "assistant",
+            content: m.text,
+          })),
+          mission_context: {
+            project: mission.project,
+            company: mission.company,
+            requirements: mission.requirements,
+            constraints: mission.constraints,
+            acceptance: mission.acceptance,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Chat API error: ${response.statusText}`);
+      }
+
       setTyping(false);
-      setMsgs((p) => [...p, { from: "agent", text: cannedReply(agent) }]);
-    }, 1200);
+
+      if (!response.body) {
+        throw new Error("No response body");
+      }
+
+      // Add a placeholder message for the streaming agent response
+      setMsgs((p) => [...p, { from: "agent", text: "" }]);
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          const chunk = decoder.decode(value);
+          setMsgs((p) => {
+            if (p.length === 0) return p;
+            const next = [...p];
+            const last = next[next.length - 1];
+            if (last.from === "agent") {
+              next[next.length - 1] = {
+                ...last,
+                text: last.text + chunk,
+              };
+            }
+            return next;
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Streaming error:", err);
+      setTyping(false);
+      setMsgs((p) => [
+        ...p,
+        { from: "agent", text: "Sorry, I am having trouble connecting right now." },
+      ]);
+    }
   };
 
   return (
