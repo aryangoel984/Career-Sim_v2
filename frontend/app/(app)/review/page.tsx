@@ -62,6 +62,7 @@ export default function ReviewPage() {
   const router = useRouter();
   const [review, setReview] = useState<ApiReview | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [missionLabel, setMissionLabel] = useState("Your submission");
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -70,6 +71,17 @@ export default function ReviewPage() {
       if (!raw) { setNotFound(true); return; }
       const parsed: ApiReview = JSON.parse(raw);
       setReview(parsed);
+
+      // Read mission context stored by the submission page
+      const missionRaw = localStorage.getItem("careersim_mission");
+      if (missionRaw) {
+        const m = JSON.parse(missionRaw);
+        if (m.project && m.company) {
+          setMissionLabel(`${m.project} · ${m.company}`);
+        } else if (m.project) {
+          setMissionLabel(m.project);
+        }
+      }
     } catch {
       setNotFound(true);
     }
@@ -105,7 +117,7 @@ export default function ReviewPage() {
             <div className="eyebrow">AI Reviewer · Aisha Khan</div>
             <h1 style={{ fontSize: "clamp(28px,4vw,40px)", marginTop: 12 }}>Submission review</h1>
             <p style={{ color: "var(--text-dim)", fontSize: 16, marginTop: 8 }}>
-              Hospital Support Chatbot · evaluated against project brief
+              {missionLabel} · evaluated against project brief
             </p>
           </div>
           <Card className="pad" style={{ display: "flex", alignItems: "center", gap: 18, textAlign: "left" }}>

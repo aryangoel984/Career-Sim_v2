@@ -1,11 +1,13 @@
 import os
 import re
 import json
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from groq import AsyncGroq
 from models.schemas import ReviewRequest, ReviewResponse
 from agents.prompts import get_review_prompt
 from services.github import fetch_repo_bundle
+from auth.verify import verify_token
+from db.supabase import get_supabase
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,7 +27,7 @@ def _strip_fences(text: str) -> str:
 
 
 @router.post("/api/review", response_model=ReviewResponse)
-async def review_endpoint(request: ReviewRequest):
+async def review_endpoint(request: ReviewRequest, user_id: str = Depends(verify_token)):
     print(f"\n{'='*60}")
     print(f"[review] POST /api/review")
     print(f"[review] GitHub URL: {request.github_url}")
@@ -100,6 +102,27 @@ async def review_endpoint(request: ReviewRequest):
 
     print(f"[review] Step 5 DONE — overall={review.overall}, scores={[s.label for s in review.scores]}")
     print(f"[review] verified_skills={review.verified_skills}")
+
+    # 6. Persist full review to the reviews table (best-effort, non-blocking)
+    print(f"[review] Step 6 — Persisting review to DB...")
+    try:
+        supabase = get_supabase()
+        result = supabase.table("reviews").insert({
+            "user_id": user_id,
+            "mission": request.mission_context.project,
+            # 'company' column does not exist in this table — omitted
+            "overall": review.overall,
+            "scores": [s.dict() for s in review.scores],
+            "strengths": [s.dict() for s in review.strengths],
+            "weaknesses": [s.dict() for s in review.weaknesses],
+            "summary": review.summary,
+            "verified_skills": review.verified_skills,
+        }).execute()
+        print(f"[review] Step 6 DONE — review persisted, id={result.data[0].get('id') if result.data else 'unknown'}")
+    except Exception as e:
+        # Non-blocking — review is still returned even if DB write fails
+        print(f"[review] WARN Step 6 — DB write failed: {type(e).__name__}: {e}")
+
     print(f"[review] SUCCESS — returning ReviewResponse")
     print(f"{'='*60}\n")
     return review

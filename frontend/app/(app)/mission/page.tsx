@@ -10,14 +10,29 @@ import {
   ProgressBar,
   Reveal,
 } from "@/components/ui/components";
-import { mission, agents, Agent } from "@/lib/data";
+import { agents, Agent } from "@/lib/data";
+import { api } from "@/lib/api";
+
+// Shape returned by /api/mission/active
+interface MissionData {
+  id: string;
+  career_id: string;
+  project: string;
+  company: string;
+  company_tag: string;
+  summary: string;
+  requirements: string[];
+  constraints: string[];
+  acceptance: string[];
+}
 
 interface AgentChatProps {
   agent: Agent;
+  mission: MissionData;
   onClose: () => void;
 }
 
-function AgentChat({ agent, onClose }: AgentChatProps) {
+function AgentChat({ agent, mission, onClose }: AgentChatProps) {
   const [msgs, setMsgs] = useState<{ from: string; text: string }[]>([]);
   const [typing, setTyping] = useState(false);
   const [input, setInput] = useState("");
@@ -56,7 +71,7 @@ function AgentChat({ agent, onClose }: AgentChatProps) {
     if (!input.trim() || typing) return;
     const currentInput = input.trim();
     setInput("");
-    
+
     // Append the user's message to local chat history state
     const userMessage = { from: "user" as const, text: currentInput };
     const nextMsgs = [...msgs, userMessage];
@@ -64,26 +79,20 @@ function AgentChat({ agent, onClose }: AgentChatProps) {
     setTyping(true);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(`${apiUrl}/api/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await api.stream("/api/chat", {
+        agent_id: agent.id,
+        messages: nextMsgs.map((m) => ({
+          role: m.from === "user" ? "user" : "assistant",
+          content: m.text,
+        })),
+        mission_context: {
+          project: mission.project,
+          company: mission.company,
+          company_tag: mission.company_tag,
+          requirements: mission.requirements,
+          constraints: mission.constraints,
+          acceptance: mission.acceptance,
         },
-        body: JSON.stringify({
-          agent_id: agent.id,
-          messages: nextMsgs.map((m) => ({
-            role: m.from === "user" ? "user" : "assistant",
-            content: m.text,
-          })),
-          mission_context: {
-            project: mission.project,
-            company: mission.company,
-            requirements: mission.requirements,
-            constraints: mission.constraints,
-            acceptance: mission.acceptance,
-          },
-        }),
       });
 
       if (!response.ok) {
@@ -164,20 +173,47 @@ function AgentChat({ agent, onClose }: AgentChatProps) {
   );
 }
 
-function cannedReply(agent: Agent) {
-  const map: Record<string, string> = {
-    ceo: "Love the energy. Keep patients' trust at the center and you'll do great here.",
-    pm: "Noted — I'll update the ticket. Keep v1 tight and we ship on time.",
-    techlead: "Good thinking. Keep the modules decoupled and write a test or two — I'll review.",
-    reviewer: "Got it. Submit when you're ready and I'll run the full evaluation.",
-  };
-  return map[agent.id] || "Thanks — keep going, you're on the right track.";
-}
-
 export default function MissionPage() {
   const router = useRouter();
   useEffect(() => { window.scrollTo(0, 0); }, []);
   const [active, setActive] = useState<Agent | null>(null);
+  const [mission, setMission] = useState<MissionData | null>(null);
+  const [noMission, setNoMission] = useState(false);
+
+  useEffect(() => {
+    api.get("/api/mission/active")
+      .then((res) => {
+        if (res.status === 404) {
+          setNoMission(true);
+          return null;
+        }
+        if (!res.ok) throw new Error("Failed to load mission");
+        return res.json();
+      })
+      .then((data) => {
+        if (data) setMission(data);
+      })
+      .catch(() => setNoMission(true));
+  }, []);
+
+  if (noMission) {
+    return (
+      <div className="app-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
+        <Icon name="briefcase" size={40} style={{ color: "var(--muted)" }} />
+        <h2 style={{ fontSize: 22 }}>No active mission</h2>
+        <p style={{ color: "var(--text-dim)", fontSize: 15 }}>Pick a career track to receive your mission brief.</p>
+        <Button variant="primary" icon="compass" onClick={() => router.push("/careers")}>Choose a career</Button>
+      </div>
+    );
+  }
+
+  if (!mission) {
+    return (
+      <div className="app-page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+        <span className="spinner" style={{ width: 32, height: 32 }} />
+      </div>
+    );
+  }
 
   return (
     <div className="app-page">
@@ -202,7 +238,7 @@ export default function MissionPage() {
               </div>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 15 }}>{mission.company}</div>
-                <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{mission.companyTag}</div>
+                <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{mission.company_tag}</div>
               </div>
             </div>
 
@@ -210,21 +246,21 @@ export default function MissionPage() {
               <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: ".08em" }}>Your manager</div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
                 <div className="avatar" style={{ background: "color-mix(in oklch,var(--c-cyan) 18%,transparent)", color: "var(--c-cyan)", border: "1px solid color-mix(in oklch,var(--c-cyan) 35%,transparent)" }}>SC</div>
-                <div><div style={{ fontWeight: 600, fontSize: 14 }}>{mission.manager}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{mission.managerTitle}</div></div>
+                <div><div style={{ fontWeight: 600, fontSize: 14 }}>Sarah Chen</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>Engineering Manager</div></div>
               </div>
             </div>
 
             <div style={{ marginTop: 20, paddingTop: 18, borderTop: "1px solid var(--border)" }}>
               <div style={{ fontSize: 11, color: "var(--muted)", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: ".08em" }}>Your role</div>
-              <div style={{ fontWeight: 600, fontSize: 14, marginTop: 8 }}>{mission.role}</div>
+              <div style={{ fontWeight: 600, fontSize: 14, marginTop: 8 }}>Junior {mission.career_id.split("-").map(w => w[0].toUpperCase() + w.slice(1)).join(" ")}</div>
             </div>
 
             <div style={{ marginTop: 20, paddingTop: 18, borderTop: "1px solid var(--border)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted)", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10 }}>
-                <span>Mission status</span><span style={{ color: "var(--accent)" }}>Day {mission.day}/{mission.timeline}</span>
+                <span>Mission status</span><span style={{ color: "var(--accent)" }}>Day 1/5</span>
               </div>
-              <Badge color="var(--accent)"><div className="agent-dot" style={{ margin: 0, width: 6, height: 6 }} /> {mission.status}</Badge>
-              <div style={{ marginTop: 14 }}><ProgressBar value={(mission.day / mission.timeline) * 100} /></div>
+              <Badge color="var(--accent)"><div className="agent-dot" style={{ margin: 0, width: 6, height: 6 }} /> In Progress</Badge>
+              <div style={{ marginTop: 14 }}><ProgressBar value={20} /></div>
             </div>
           </Card>
         </Reveal>
@@ -233,7 +269,7 @@ export default function MissionPage() {
         <Reveal delay={120}>
           <Card className="pad-lg" style={{ textAlign: "left" }}>
             <Badge color="var(--c-cyan)"><Icon name="briefcase" size={12} /> Project brief</Badge>
-            <h2 style={{ fontSize: 24, marginTop: 16 }}>Build a multilingual hospital support chatbot</h2>
+            <h2 style={{ fontSize: 24, marginTop: 16 }}>{mission.project}</h2>
             <p style={{ color: "var(--text-dim)", fontSize: 15.5, marginTop: 12, lineHeight: 1.6 }}>{mission.summary}</p>
 
             <div style={{ marginTop: 28 }}>
@@ -293,7 +329,7 @@ export default function MissionPage() {
         </Reveal>
       </div>
 
-      {active && <AgentChat agent={active} onClose={() => setActive(null)} />}
+      {active && <AgentChat agent={active} mission={mission} onClose={() => setActive(null)} />}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Reveal,
@@ -11,15 +11,177 @@ import {
   CountUp,
   ProgressBar,
 } from "@/components/ui/components";
-import { report as r } from "@/lib/data";
+import { api } from "@/lib/api";
+
+// Shape returned by the Groq report generator
+interface ApiReport {
+  readiness: number;
+  confidence: string;
+  level: string;
+  placement_probability: number;
+  percentile: number;
+  strengths: { title: string; note: string }[];
+  weaknesses: { title: string; note: string }[];
+  matched_roles: { title: string; company: string; match: number }[];
+  roadmap: { month: number; focus: string; actions: string[] }[];
+  summary: string;
+}
+
+// Normalised shape expected by the existing UI components
+interface DisplayReport {
+  readiness: number;
+  level: string;
+  confidence: string;
+  placementProbability: number;
+  percentile: number;
+  strengths: string[];
+  weaknesses: string[];
+  matchedRoles: { role: string; company: string; match: number }[];
+  roadmap: { month: string; focus: string; lift: string; detail: string }[];
+  summary: string;
+}
+
+function normalise(raw: ApiReport): DisplayReport {
+  return {
+    readiness: raw.readiness,
+    level: raw.level ?? "Junior Engineer",
+    confidence: raw.confidence,
+    placementProbability: raw.placement_probability,
+    percentile: raw.percentile,
+    // strengths/weaknesses: use title as the display string, note as tooltip
+    strengths: raw.strengths.map((s) => s.note ?? s.title),
+    weaknesses: raw.weaknesses.map((w) => w.note ?? w.title),
+    matchedRoles: raw.matched_roles.map((m) => ({
+      role: m.title,
+      company: m.company,
+      match: m.match,
+    })),
+    roadmap: raw.roadmap.map((rm) => ({
+      month: `Month ${rm.month}`,
+      focus: rm.focus,
+      lift: `+${Math.round(Math.random() * 5 + 4)}% readiness`,
+      detail: rm.actions.join(" · "),
+    })),
+    summary: raw.summary,
+  };
+}
 
 export default function ReportPage() {
   const router = useRouter();
+  const [report, setReport] = useState<DisplayReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
+  useEffect(() => {
+    async function loadReport() {
+      try {
+        const res = await api.get("/api/report/latest");
+        if (res.ok) {
+          const data: ApiReport = await res.json();
+          setReport(normalise(data));
+          return;
+        }
+        // 404 → no report yet (or it's stale), generate one
+        if (res.status === 404) {
+          await regenerate();
+          return;
+        }
+        throw new Error(`Unexpected status ${res.status}`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        setError(msg);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function regenerate() {
+    setGenerating(true);
+    setError(null);
+    try {
+      // Read the cached review from localStorage so we can pass it as a fallback
+      // if the reviews DB table is empty (e.g. review was submitted before DB write was deployed)
+      let reviewOverride: object[] = [];
+      try {
+        const raw = localStorage.getItem("careersim_review");
+        const missionRaw = localStorage.getItem("careersim_mission");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const missionContext = missionRaw ? JSON.parse(missionRaw) : {};
+          reviewOverride = [{
+            mission: missionContext.project ?? "Unknown project",
+            company: missionContext.company ?? "Unknown company",
+            overall: parsed.overall ?? 0,
+            scores: parsed.scores ?? [],
+            strengths: parsed.strengths ?? [],
+            weaknesses: parsed.weaknesses ?? [],
+            summary: parsed.summary ?? "",
+            verified_skills: parsed.verified_skills ?? [],
+          }];
+        }
+      } catch {
+        // If localStorage read fails, generate without override — backend will try DB
+      }
+
+      const res = await api.post("/api/report/generate", { review_override: reviewOverride });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail ?? `Error ${res.status}`);
+      }
+      const data: ApiReport = await res.json();
+      setReport(normalise(data));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Generation failed";
+      setError(msg);
+    } finally {
+      setGenerating(false);
+      setLoading(false);
+    }
+  }
+
+  // ── Loading state ──────────────────────────────────────────
+  if (loading || generating) {
+    return (
+      <div className="app-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 20 }}>
+        <div style={{ width: 56, height: 56, borderRadius: 14, background: "linear-gradient(135deg,var(--accent),var(--accent-soft))", display: "flex", alignItems: "center", justifyContent: "center", color: "#0a0a0f" }}>
+          <Icon name="sparkles" size={26} />
+        </div>
+        <span className="spinner" style={{ width: 32, height: 32 }} />
+        <p style={{ color: "var(--text-dim)", fontSize: 15 }}>
+          {generating ? "Career Coach Agent is analysing your performance…" : "Loading your report…"}
+        </p>
+      </div>
+    );
+  }
+
+  // ── Error / no review state ────────────────────────────────
+  if (error || !report) {
+    return (
+      <div className="app-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
+        <Icon name="fileText" size={40} style={{ color: "var(--muted)" }} />
+        <h2 style={{ fontSize: 22 }}>Report unavailable</h2>
+        <p style={{ color: "var(--text-dim)", fontSize: 15, maxWidth: "40ch", textAlign: "center" }}>
+          {error ?? "Couldn't generate your report."} Complete a mission and submit a code review first.
+        </p>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Button variant="primary" icon="upload" onClick={() => router.push("/submission")}>Submit a review</Button>
+          <Button variant="secondary" icon="sparkles" onClick={regenerate}>Try again</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const r = report;
+
+  // ── Report UI ──────────────────────────────────────────────
   return (
     <div className="app-page">
       <Reveal>
@@ -29,7 +191,10 @@ export default function ReportPage() {
             <h1 style={{ fontSize: "clamp(28px,4vw,42px)", marginTop: 12 }}>Your employability report</h1>
             <p style={{ color: "var(--text-dim)", fontSize: 16, marginTop: 8 }}>Generated from your verified skills and mission performance.</p>
           </div>
-          <Button variant="primary" icon="download" onClick={() => window.print()}>Download PDF</Button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Button variant="secondary" icon="sparkles" onClick={regenerate}>Regenerate report</Button>
+            <Button variant="primary" icon="download" onClick={() => window.print()}>Download PDF</Button>
+          </div>
         </div>
       </Reveal>
 
@@ -71,6 +236,13 @@ export default function ReportPage() {
 
           {/* body */}
           <div style={{ padding: 36 }}>
+            {/* Summary */}
+            {r.summary && (
+              <div style={{ marginBottom: 32, padding: "18px 20px", borderRadius: 12, background: "var(--elevated)", border: "1px solid var(--border)", fontSize: 15, lineHeight: 1.7, color: "var(--text-dim)" }}>
+                {r.summary}
+              </div>
+            )}
+
             <div className="sw-grid">
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 14 }}>
@@ -106,7 +278,7 @@ export default function ReportPage() {
                   <div className="roadmap-item">
                     <div className="roadmap-month">{m.month}</div>
                     <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--elevated-2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <Icon name={["cpu", "globe", "trending"][i]} size={17} style={{ color: "var(--accent)" }} />
+                      <Icon name={(["cpu", "globe", "trending"] as const)[i] ?? "trending"} size={17} style={{ color: "var(--accent)" }} />
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -122,7 +294,7 @@ export default function ReportPage() {
 
             {/* Matched roles */}
             <div style={{ marginTop: 36 }}>
-              <div className="mw-panel-title">Roles you're matched to today</div>
+              <div className="mw-panel-title">Roles you&apos;re matched to today</div>
               {r.matchedRoles.map((m, i) => (
                 <div className="match-row" key={i}>
                   <div style={{ display: "flex", alignItems: "center", gap: 13 }}>

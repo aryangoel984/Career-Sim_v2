@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata: Metadata = {
   title: "CareerSim AI — Get job experience before getting a job",
@@ -18,9 +19,11 @@ export default function RootLayout({
         <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&f[]=jetbrains-mono@400,500&display=swap" rel="stylesheet" />
       </head>
       <body>
-        <div id="root">
-          {children}
-        </div>
+        <AuthProvider>
+          <div id="root">
+            {children}
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );

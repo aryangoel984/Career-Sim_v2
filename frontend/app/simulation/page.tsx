@@ -10,10 +10,17 @@ import {
 } from "@/components/ui/components";
 import { workflowSteps } from "@/lib/data";
 
+const ASSIGNMENT_LINES = [
+  "Analyzing market demand for your career path...",
+  "Matching you with a company that fits your skill level...",
+  "Finalizing your mission brief...",
+];
+
 export default function WorkflowPage() {
   const router = useRouter();
   const [current, setCurrent] = useState(-1);
   const [done, setDone] = useState(false);
+  const [assignmentLine, setAssignmentLine] = useState(0);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -37,6 +44,18 @@ export default function WorkflowPage() {
     return () => clearInterval(id);
   }, []);
 
+  // Rotate the assignment step status line while that step is active
+  useEffect(() => {
+    // workflowSteps index 1 is the "Assignment Agent" step
+    if (current !== 1) return;
+    let lineIdx = 0;
+    const id = setInterval(() => {
+      lineIdx = (lineIdx + 1) % ASSIGNMENT_LINES.length;
+      setAssignmentLine(lineIdx);
+    }, 560);
+    return () => clearInterval(id);
+  }, [current]);
+
   return (
     <div className="app-page" style={{ minHeight: "100vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
       <div className="glow" style={{ opacity: .6 }} />
@@ -54,6 +73,10 @@ export default function WorkflowPage() {
         <div className="wf-stage">
           {workflowSteps.map((s, i) => {
             const state = current > i ? "done" : current === i ? "active" : "pending";
+            const isAssignment = s.id === "assignment";
+            const desc = isAssignment && state === "active"
+              ? ASSIGNMENT_LINES[assignmentLine]
+              : s.desc;
             return (
               <React.Fragment key={s.id}>
                 <div className={`wf-step ${state}`}>
@@ -66,7 +89,7 @@ export default function WorkflowPage() {
                       {state === "active" && <span className="spinner" />}
                       {state === "done" && <Badge color="var(--good)">Done</Badge>}
                     </div>
-                    <p style={{ color: "var(--text-dim)", fontSize: 13.5, marginTop: 4 }}>{s.desc}</p>
+                    <p style={{ color: "var(--text-dim)", fontSize: 13.5, marginTop: 4 }}>{desc}</p>
                     {state === "active" && <div className="wf-bar"><div className="wf-bar-fill" /></div>}
                   </div>
                   <div className="mono" style={{ fontSize: 12, color: "var(--faint)" }}>{String(i + 1).padStart(2, "0")}</div>

@@ -4,3 +4,5 @@ groq
 python-dotenv
 pydantic
 google-genai
+PyJWT==2.8.0
+supabase>=2.7.0

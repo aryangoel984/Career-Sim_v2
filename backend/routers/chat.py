@@ -1,9 +1,10 @@
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from groq import AsyncGroq
 from models.schemas import ChatRequest
 from agents.prompts import get_system_prompt
+from auth.verify import verify_token
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -16,7 +17,7 @@ api_key = os.getenv("GROQ_API_KEY")
 client = AsyncGroq(api_key=api_key)
 
 @router.post("/api/chat")
-async def chat_endpoint(request: ChatRequest):
+async def chat_endpoint(request: ChatRequest, user_id: str = Depends(verify_token)):
     try:
         # Generate the custom system prompt for the specified colleague
         system_prompt = get_system_prompt(request.agent_id, request.mission_context)

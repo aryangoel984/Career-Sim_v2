@@ -9,6 +9,7 @@ import {
   Icon,
 } from "@/components/ui/components";
 import { careers, Career } from "@/lib/data";
+import { api } from "@/lib/api";
 
 interface CareerCardProps {
   c: Career;
@@ -79,7 +80,19 @@ function iconFor(id: string) {
 export default function CareersPage() {
   const router = useRouter();
   useEffect(() => { window.scrollTo(0, 0); }, []);
-  const onSelect = () => {
+  const onSelect = async (c: Career) => {
+    // Persist chosen career to the user's profile — best-effort
+    try {
+      await api.patch("/api/profile/career", { career: c.title });
+    } catch {
+      // Non-blocking — continue even if it fails
+    }
+    // Assign the matching mission for this career — best-effort
+    try {
+      await api.post("/api/mission/assign", { career_id: c.id });
+    } catch {
+      // Non-blocking — mission page will show a "go back" prompt if none found
+    }
     router.push("/simulation");
   };
   return (

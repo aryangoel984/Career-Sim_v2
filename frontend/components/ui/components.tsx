@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 /* ---- Icons (minimal line set, lucide-style) ---- */
 export const ICON_PATHS: Record<string, string> = {
@@ -265,6 +266,32 @@ export function Logo({ size = 28, onClick }: LogoProps) {
 /* ---- App nav bar ---- */
 export function AppNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, logout } = useAuth();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Derive initials from full_name (e.g. "Aryan Goel" → "AG", "Alice" → "AL")
+  const initials = user?.full_name
+    ? user.full_name
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((w) => w[0].toUpperCase())
+        .join("")
+    : "??";
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const items = [
     { id: "dashboard", label: "Dashboard", icon: "grid" },
     { id: "careers", label: "Careers", icon: "compass" },
@@ -273,6 +300,7 @@ export function AppNav() {
     { id: "passport", label: "Passport", icon: "award" },
     { id: "report", label: "Report", icon: "trending" },
   ];
+
   return (
     <header className="appnav">
       <Link href="/">
@@ -291,8 +319,134 @@ export function AppNav() {
         })}
       </nav>
       <div className="appnav-right">
-        <div className="appnav-streak"><Icon name="flame" size={14} style={{ color: "var(--c-amber)" }} /> 11</div>
-        <div className="avatar avatar-me">AR</div>
+        {/* Profile avatar + dropdown */}
+        <div ref={dropdownRef} style={{ position: "relative" }}>
+          <button
+            id="profile-avatar-btn"
+            className="avatar avatar-me"
+            onClick={() => setDropdownOpen((v) => !v)}
+            title={user?.full_name || "Profile"}
+            style={{
+              cursor: "pointer",
+              background: "color-mix(in oklch, var(--accent) 22%, var(--elevated-2))",
+              color: "var(--accent)",
+              border: "1.5px solid color-mix(in oklch, var(--accent) 40%, transparent)",
+              transition: "border-color .2s, box-shadow .2s",
+              boxShadow: dropdownOpen
+                ? "0 0 0 3px color-mix(in oklch, var(--accent) 20%, transparent)"
+                : "none",
+            }}
+          >
+            {initials}
+          </button>
+
+          {dropdownOpen && (
+            <div
+              id="profile-dropdown"
+              style={{
+                position: "absolute",
+                top: "calc(100% + 10px)",
+                right: 0,
+                minWidth: 230,
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 14,
+                boxShadow: "0 16px 48px rgba(0,0,0,.55)",
+                zIndex: 1000,
+                overflow: "hidden",
+              }}
+            >
+              {/* User info header */}
+              <div
+                style={{
+                  padding: "16px 18px 14px",
+                  borderBottom: "1px solid var(--border)",
+                  background: "var(--elevated)",
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)" }}>
+                  {user?.full_name || "—"}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--muted)",
+                    marginTop: 3,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {user?.email || ""}
+                </div>
+              </div>
+
+              {/* Menu items */}
+              <div style={{ padding: "8px 0" }}>
+                <button
+                  id="profile-link-btn"
+                  onClick={() => { setDropdownOpen(false); router.push("/profile"); }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    width: "100%",
+                    padding: "10px 18px",
+                    background: "none",
+                    border: "none",
+                    color: "var(--text-dim)",
+                    fontSize: 14,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "background .15s, color .15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = "var(--elevated)";
+                    (e.currentTarget as HTMLButtonElement).style.color = "var(--text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = "none";
+                    (e.currentTarget as HTMLButtonElement).style.color = "var(--text-dim)";
+                  }}
+                >
+                  <Icon name="users" size={15} style={{ color: "var(--muted)" }} />
+                  Profile
+                </button>
+
+                <div style={{ height: 1, background: "var(--border)", margin: "6px 12px" }} />
+
+                <button
+                  id="logout-btn"
+                  onClick={async () => { setDropdownOpen(false); await logout(); }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    width: "100%",
+                    padding: "10px 18px",
+                    background: "none",
+                    border: "none",
+                    color: "var(--c-rose)",
+                    fontSize: 14,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "background .15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background =
+                      "color-mix(in oklch, var(--c-rose) 10%, transparent)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = "none";
+                  }}
+                >
+                  <Icon name="x" size={15} style={{ color: "var(--c-rose)" }} />
+                  Log out
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

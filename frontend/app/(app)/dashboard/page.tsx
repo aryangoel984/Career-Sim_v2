@@ -13,13 +13,30 @@ import {
   RadarChart,
 } from "@/components/ui/components";
 import { dashboard as d, radar } from "@/lib/data";
+import { useAuth } from "@/context/AuthContext";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  // Redirect if definitely not logged in (after auth context has loaded)
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [loading, user, router]);
+
+  if (loading) {
+    return (
+      <div className="app-page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+        <span className="spinner" style={{ width: 32, height: 32 }} />
+      </div>
+    );
+  }
 
   return (
     <div className="app-page">
@@ -27,9 +44,9 @@ export default function DashboardPage() {
         <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", gap: 16, marginBottom: 28 }}>
           <div style={{ textAlign: "left" }}>
             <div className="eyebrow">Dashboard</div>
-            <h1 style={{ fontSize: "clamp(28px,4vw,40px)", marginTop: 12 }}>Welcome back, {d.name}.</h1>
+            <h1 style={{ fontSize: "clamp(28px,4vw,40px)", marginTop: 12 }}>Welcome back, {user?.full_name?.split(" ")[0] ?? "there"}.</h1>
             <p style={{ color: "var(--text-dim)", fontSize: 16, marginTop: 8 }}>
-              Career path: <span style={{ color: "var(--text)", fontWeight: 600 }}>{d.careerPath}</span> · You're <span style={{ color: "var(--accent)", fontWeight: 700 }}>{d.progress}%</span> of the way to job-ready.
+              Career path: <span style={{ color: "var(--text)", fontWeight: 600 }}>{user?.career || d.careerPath}</span> · You're <span style={{ color: "var(--accent)", fontWeight: 700 }}>{d.progress}%</span> of the way to job-ready.
             </p>
           </div>
           <Button variant="primary" icon="briefcase" onClick={() => router.push("/mission")}>Resume mission</Button>

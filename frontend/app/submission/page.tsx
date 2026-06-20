@@ -10,35 +10,57 @@ import {
   ProgressBar,
 } from "@/components/ui/components";
 import { analysisStages } from "@/lib/data";
+import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
-const MISSION_CONTEXT = {
-  project: "Hospital Support Chatbot",
-  company: "HealthTech Solutions",
-  requirements: [
-    "Bilingual support — English + Hindi",
-    "FAQ retrieval over the hospital knowledge base",
-    "Appointment scheduling support",
-    "Inline source citations on every answer",
-  ],
-  constraints: ["FastAPI", "Retrieval-Augmented Generation", "Vector Search", "< 1.2s p95 latency"],
-  acceptance: [
-    "Answers cite at least one source document",
-    "Handles code-switching between English & Hindi",
-    "Graceful fallback when confidence is low",
-  ],
-};
+interface MissionData {
+  id: string;
+  career_id: string;
+  project: string;
+  company: string;
+  company_tag: string;
+  summary: string;
+  requirements: string[];
+  constraints: string[];
+  acceptance: string[];
+}
 
 export default function SubmissionPage() {
   const router = useRouter();
+  const { user, loading } = useAuth();
   const [phase, setPhase] = useState<"form" | "analyzing">("form");
   const [stage, setStage] = useState(0);
   const [github, setGithub] = useState("");
   const [file, setFile] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mission, setMission] = useState<MissionData | null>(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  // Redirect to login if not authenticated (wait for loading to complete first)
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [loading, user, router]);
+
+  // Fetch the active mission so review uses real context
+  useEffect(() => {
+    if (!user) return;
+    api.get("/api/mission/active")
+      .then((res) => {
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then((data) => {
+        if (data) setMission(data);
+      })
+      .catch(() => {
+        // Non-blocking — falls back to null; handleSubmit will guard
+      });
+  }, [user]);
 
   // Advance the visual analysis stage ticker while waiting for the real API call
   useEffect(() => {
@@ -48,25 +70,42 @@ export default function SubmissionPage() {
     return () => clearTimeout(t);
   }, [phase, stage]);
 
+  // Show spinner while auth context is restoring (all hooks must come before this)
+  if (loading) {
+    return (
+      <div className="app-page" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+        <span className="spinner" style={{ width: 32, height: 32 }} />
+      </div>
+    );
+  }
+
   const handleSubmit = async () => {
     const url = github.trim();
     if (!url) {
       setError("Please enter a GitHub repository URL.");
       return;
     }
+    if (!mission) {
+      setError("No active mission found. Please select a career first.");
+      return;
+    }
     setError(null);
     setPhase("analyzing");
     setStage(0);
 
+    const missionContext = {
+      project: mission.project,
+      company: mission.company,
+      company_tag: mission.company_tag,
+      requirements: mission.requirements,
+      constraints: mission.constraints,
+      acceptance: mission.acceptance,
+    };
+
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(`${apiUrl}/api/review`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          github_url: url,
-          mission_context: MISSION_CONTEXT,
-        }),
+      const response = await api.post("/api/review", {
+        github_url: url,
+        mission_context: missionContext,
       });
 
       if (!response.ok) {
@@ -76,9 +115,25 @@ export default function SubmissionPage() {
 
       const reviewData = await response.json();
 
-      // Store review and the submitted GitHub URL — passport page reads both
+      // Store review and the submitted GitHub URL — review/passport pages read both
       localStorage.setItem("careersim_review", JSON.stringify(reviewData));
       localStorage.setItem("careersim_github_url", url);
+      // Store mission context so review page can display the real project name
+      localStorage.setItem("careersim_mission", JSON.stringify(missionContext));
+
+      // Persist verified skills to the database — best-effort
+      try {
+        await api.post("/api/skills/save", {
+          verified_skills: reviewData.verified_skills ?? [],
+          career: mission.career_id,
+          mission: mission.project,
+          repo_url: url,
+          scores: reviewData.scores ?? [],
+          overall: reviewData.overall ?? 0,
+        });
+      } catch {
+        // Non-blocking — skills save failure should not block review redirect
+      }
 
       // Advance to the last stage before redirecting
       setStage(analysisStages.length);
