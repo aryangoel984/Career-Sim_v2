@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers.chat import router as chat_router
@@ -17,6 +18,11 @@ origins = [
     "http://localhost:3001",
     "http://127.0.0.1:3001",
 ]
+
+# Add production frontend URL from environment variable if it exists
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    origins.append(frontend_url)
 
 app.add_middleware(
     CORSMiddleware,
