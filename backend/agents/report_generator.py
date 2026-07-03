@@ -73,7 +73,7 @@ confidence must be one of: "Early Stage", "Needs Work", "Nearly There", "Job Rea
 the actual readiness score (below 50: Early Stage, 50-65: Needs Work, 66-80: Nearly There, 81+: Job Ready)."""
 
     response = await client.chat.completions.create(
-        model="qwen/qwen3.6-27b",
+        model="llama-3.3-70b-versatile",
         max_tokens=1500,
         temperature=0.4,
         messages=[{"role": "user", "content": prompt}]

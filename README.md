@@ -33,7 +33,7 @@ CareerSim AI is an advanced, autonomous AI-powered platform designed to simulate
 
 ### 🧠 Artificial Intelligence
 - **Inference Engine**: Groq API *(Chosen for ultra-fast, near-instant LLM inference speeds)*
-- **Model**: `qwen/qwen3.6-27b` 
+- **Model**: `Llama-3.3-70b-versatile` 
 
 ### 🗄️ Database & Auth
 - **Platform**: Supabase
