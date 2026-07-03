@@ -49,10 +49,10 @@ async def review_endpoint(request: ReviewRequest, user_id: str = Depends(verify_
     print(f"[review] Step 2 DONE — system={len(system_prompt)} chars, user_msg={len(user_message):,} chars")
 
     # 3. Call Groq — non-streaming, wait for the full response
-    print(f"[review] Step 3 — Calling Groq (llama-3.3-70b-versatile, non-streaming)...")
+    print(f"[review] Step 3 — Calling Groq (qwen/qwen3.6-27b, non-streaming)...")
     try:
         completion = await client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model= "qwen/qwen3.6-27b",
             messages=[
                 {
                     "role": "system",
