@@ -19,11 +19,64 @@ api_key = os.getenv("GROQ_API_KEY")
 client = AsyncGroq(api_key=api_key)
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*|\s*```", re.IGNORECASE)
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
 def _strip_fences(text: str) -> str:
     """Remove markdown code fences that Groq may wrap around the JSON."""
     return _FENCE_RE.sub("", text).strip()
+
+
+REVIEW_REQUIRED_KEYS = {"overall", "scores", "strengths", "weaknesses", "summary", "verified_skills"}
+
+
+def _extract_review_json(text: str) -> str:
+    """
+    Extract the JSON object that contains all ReviewResponse keys.
+    Strategy: collect all complete {…} candidates (largest-first), try json.loads on each,
+    return the first that has all required keys. Falls back to auto-closing truncated JSON.
+    """
+    candidates = []
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        depth = 0
+        for j in range(i, len(text)):
+            if text[j] == "{":
+                depth += 1
+            elif text[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    candidates.append(text[i:j + 1])
+                    break
+
+    # Sort largest first — the full response is always the biggest object
+    candidates.sort(key=len, reverse=True)
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+            if isinstance(data, dict) and REVIEW_REQUIRED_KEYS.issubset(data.keys()):
+                return candidate
+        except json.JSONDecodeError:
+            continue
+
+    # Last resort: find the first { and close any unclosed braces (handles truncation)
+    start = text.find("{")
+    if start != -1:
+        fragment = text[start:]
+        depth = fragment.count("{") - fragment.count("}")
+        if depth > 0:
+            fragment += "}" * depth
+        return fragment
+
+    return text
+
+
+def _clean_response(text: str) -> str:
+    """Strip <think>...</think> blocks and markdown fences, then extract ReviewResponse JSON."""
+    text = _THINK_RE.sub("", text).strip()
+    text = _strip_fences(text)
+    return _extract_review_json(text)
 
 
 @router.post("/api/review", response_model=ReviewResponse)
@@ -49,10 +102,10 @@ async def review_endpoint(request: ReviewRequest, user_id: str = Depends(verify_
     print(f"[review] Step 2 DONE — system={len(system_prompt)} chars, user_msg={len(user_message):,} chars")
 
     # 3. Call Groq — non-streaming, wait for the full response
-    print(f"[review] Step 3 — Calling Groq (llama-3.3-70b-versatile, non-streaming)...")
+    print(f"[review] Step 3 — Calling Groq (qwen3.6-27b, non-streaming)...")
     try:
         completion = await client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="qwen/qwen3.6-27b",
             messages=[
                 {
                     "role": "system",
@@ -63,7 +116,7 @@ async def review_endpoint(request: ReviewRequest, user_id: str = Depends(verify_
                     "content": user_message,
                 },
             ],
-            max_tokens=2000,
+            max_tokens=4000,
             temperature=0.3,
             stream=False,
         )
@@ -77,7 +130,7 @@ async def review_endpoint(request: ReviewRequest, user_id: str = Depends(verify_
 
     # 4. Strip fences and parse JSON
     print(f"[review] Step 4 — Parsing JSON response...")
-    cleaned = _strip_fences(raw_text)
+    cleaned = _clean_response(raw_text)
     try:
         data = json.loads(cleaned)
     except json.JSONDecodeError as e:

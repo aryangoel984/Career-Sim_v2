@@ -6,10 +6,63 @@ import os
 client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*|\s*```", re.IGNORECASE)
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
 
 def _strip_fences(text: str) -> str:
     return _FENCE_RE.sub("", text).strip()
+
+
+REPORT_REQUIRED_KEYS = {"readiness", "confidence", "placement_probability", "percentile",
+                        "strengths", "weaknesses", "matched_roles", "roadmap", "summary"}
+
+
+def _extract_report_json(text: str) -> str:
+    """
+    Collect all complete {…} candidates, try json.loads on each (largest first),
+    return the first that has all required report keys.
+    Falls back to auto-closing truncated JSON if nothing matches.
+    """
+    candidates = []
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        depth = 0
+        for j in range(i, len(text)):
+            if text[j] == "{":
+                depth += 1
+            elif text[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    candidates.append(text[i:j + 1])
+                    break
+
+    candidates.sort(key=len, reverse=True)
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+            if isinstance(data, dict) and REPORT_REQUIRED_KEYS.issubset(data.keys()):
+                return candidate
+        except json.JSONDecodeError:
+            continue
+
+    # Truncation fallback: auto-close unclosed braces from first {
+    start = text.find("{")
+    if start != -1:
+        fragment = text[start:]
+        depth = fragment.count("{") - fragment.count("}")
+        if depth > 0:
+            fragment += "}" * depth
+        return fragment
+
+    return text
+
+
+def _clean_response(text: str) -> str:
+    """Strip <think>...</think> blocks and markdown fences, then extract report JSON."""
+    text = _THINK_RE.sub("", text).strip()
+    text = _strip_fences(text)
+    return _extract_report_json(text)
 
 
 async def generate_report(career: str, mission: dict, reviews: list) -> dict:
@@ -73,12 +126,12 @@ confidence must be one of: "Early Stage", "Needs Work", "Nearly There", "Job Rea
 the actual readiness score (below 50: Early Stage, 50-65: Needs Work, 66-80: Nearly There, 81+: Job Ready)."""
 
     response = await client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        max_tokens=1500,
+        model="qwen/qwen3.6-27b",
+        max_tokens=4000,
         temperature=0.4,
         messages=[{"role": "user", "content": prompt}]
     )
 
     text = response.choices[0].message.content.strip()
-    text = _strip_fences(text)
+    text = _clean_response(text)
     return json.loads(text)
