@@ -11,7 +11,7 @@ from routers.report import router as report_router
 
 app = FastAPI(title="CareerSim AI Backend")
 
-# Configure CORS to allow requests from the Next.js frontend
+# Configure CORS to allow requests from Next.js frontend (local and production)
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -19,14 +19,15 @@ origins = [
     "http://127.0.0.1:3001",
 ]
 
-# Add production frontend URL from environment variable if it exists
 frontend_url = os.getenv("FRONTEND_URL")
 if frontend_url:
-    origins.append(frontend_url)
+    # Strip any trailing slashes to prevent exact string match failures
+    origins.append(frontend_url.rstrip("/"))
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",  # Matches production and all Vercel preview domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
