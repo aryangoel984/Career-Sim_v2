@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { Icon, Button, Logo } from "@/components/ui/components";
+import { api } from "@/lib/api";
+
+type WakeState = "unknown" | "waking" | "ready" | "error";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,6 +18,32 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
+  const [wakeState, setWakeState] = useState<WakeState>("unknown");
+
+  // Render's free tier spins the backend down after inactivity — ping /health
+  // and only bother the user with a message if it's actually slow to respond,
+  // instead of always showing a "might be slow" disclaimer.
+  useEffect(() => {
+    let cancelled = false;
+    const showDelayTimer = setTimeout(() => {
+      if (!cancelled) setWakeState("waking");
+    }, 1800);
+
+    api.health()
+      .then((res) => {
+        clearTimeout(showDelayTimer);
+        if (!cancelled) setWakeState(res.ok ? "ready" : "error");
+      })
+      .catch(() => {
+        clearTimeout(showDelayTimer);
+        if (!cancelled) setWakeState("error");
+      });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(showDelayTimer);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +94,21 @@ export default function LoginPage() {
               Sign in to continue your simulation.
             </p>
           </div>
+
+          {(wakeState === "waking" || wakeState === "error") && (
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "10px 14px", borderRadius: 9, background: "var(--elevated)", border: "1px solid var(--border)", color: "var(--text-dim)", fontSize: 12.5, lineHeight: 1.5, marginBottom: 18 }}>
+              {wakeState === "waking" ? (
+                <span className="spinner" style={{ width: 14, height: 14, flexShrink: 0, marginTop: 1 }} />
+              ) : (
+                <Icon name="clock" size={14} style={{ flexShrink: 0, marginTop: 1, color: "var(--muted)" }} />
+              )}
+              <span>
+                {wakeState === "waking"
+                  ? "Our server is waking up after inactivity — this can take up to a minute."
+                  : "Having trouble reaching our server — please refresh the page in a moment."}
+              </span>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Email */}
