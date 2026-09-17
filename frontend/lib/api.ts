@@ -68,6 +68,10 @@ async function request(path: string, options: RequestInit = {}): Promise<Respons
 export const api = {
   get: (path: string) => request(path),
 
+  // Unauthenticated ping used to detect a cold-starting backend (e.g. Render
+  // free-tier spin-down) — bypasses the 401/refresh handling in `request`.
+  health: () => fetch(`${API_URL}/health`),
+
   post: (path: string, body: object) =>
     request(path, {
       method: "POST",

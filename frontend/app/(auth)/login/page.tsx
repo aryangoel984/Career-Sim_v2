@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { Icon, Button, Logo } from "@/components/ui/components";
+import { api } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,6 +16,26 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
+  // Layered on top of the always-visible disclaimer below: confirms in
+  // real time when the backend is actually cold-starting right now.
+  const [isWaking, setIsWaking] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const showDelayTimer = setTimeout(() => {
+      if (!cancelled) setIsWaking(true);
+    }, 1800);
+
+    api.health().finally(() => {
+      clearTimeout(showDelayTimer);
+      if (!cancelled) setIsWaking(false);
+    });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(showDelayTimer);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,8 +88,17 @@ export default function LoginPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "10px 14px", borderRadius: 9, background: "var(--elevated)", border: "1px solid var(--border)", color: "var(--text-dim)", fontSize: 12.5, lineHeight: 1.5, marginBottom: 18 }}>
-            <Icon name="clock" size={14} style={{ flexShrink: 0, marginTop: 1, color: "var(--muted)" }} />
-            <span>Our server may take a few seconds to wake up after inactivity — please refresh the page if it doesn&apos;t load right away.</span>
+            {isWaking ? (
+              <span className="spinner" style={{ width: 14, height: 14, flexShrink: 0, marginTop: 1 }} />
+            ) : (
+              <Icon name="clock" size={14} style={{ flexShrink: 0, marginTop: 1, color: "var(--muted)" }} />
+            )}
+            <span>
+              {isWaking
+                ? "Waking up our server now — this can take up to a minute. "
+                : "Our server may take a few seconds to wake up after inactivity. "}
+              Please refresh the page if it doesn&apos;t load right away.
+            </span>
           </div>
 
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
