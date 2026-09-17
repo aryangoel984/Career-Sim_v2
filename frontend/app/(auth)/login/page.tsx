@@ -8,12 +8,13 @@ import { Icon, Button, Logo } from "@/components/ui/components";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, loginAsGuest } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +31,18 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : "Login failed. Try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    setError(null);
+    setGuestLoading(true);
+    try {
+      await loginAsGuest();
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Guest preview is unavailable right now.");
+      setGuestLoading(false);
     }
   };
 
@@ -111,6 +124,32 @@ export default function LoginPage() {
           <Link href="/signup" style={{ color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
             Sign up free
           </Link>
+        </p>
+
+        {/* Recruiter shortcut — kept visually distinct (amber) from the primary auth action */}
+        <p style={{ textAlign: "center", marginTop: 16 }}>
+          <button
+            type="button"
+            onClick={handleGuestLogin}
+            disabled={guestLoading}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              padding: "9px 16px",
+              borderRadius: 9,
+              background: "color-mix(in oklch, var(--warn) 16%, transparent)",
+              border: "1px solid color-mix(in oklch, var(--warn) 45%, transparent)",
+              color: "var(--warn)",
+              fontSize: 13.5,
+              fontWeight: 600,
+              cursor: guestLoading ? "default" : "pointer",
+              opacity: guestLoading ? 0.6 : 1,
+            }}
+          >
+            <Icon name="zap" size={14} />
+            {guestLoading ? "Loading guest preview…" : "Continue as Guest — recruiter preview"}
+          </button>
         </p>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { AppNav } from "@/components/ui/components";
+import { AppNav, DemoBanner } from "@/components/ui/components";
 
 export default function AppLayout({
   children,
@@ -7,6 +7,7 @@ export default function AppLayout({
 }>) {
   return (
     <div>
+      <DemoBanner />
       <AppNav />
       {children}
     </div>

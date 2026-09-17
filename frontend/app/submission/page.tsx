@@ -13,6 +13,18 @@ import { analysisStages } from "@/lib/data";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
+// Sample repos recruiters can run through the real reviewer with one click,
+// so they don't need to write their own project to see the tool work.
+const SAMPLE_REPOS: Record<string, { label: string; url: string }[]> = {
+  "ai-engineer": [
+    { label: "Try sample repo (strong)", url: "https://github.com/aryangoel986/hospital-chatbot-demo-1" },
+    { label: "Try sample repo (weak)", url: "https://github.com/aryangoel986/hospital-chatbot-demo-2" },
+  ],
+  "backend-engineer": [
+    { label: "Try sample repo", url: "https://github.com/aryangoel986/backend_task_demo" },
+  ],
+};
+
 interface MissionData {
   id: string;
   career_id: string;
@@ -79,8 +91,8 @@ export default function SubmissionPage() {
     );
   }
 
-  const handleSubmit = async () => {
-    const url = github.trim();
+  const handleSubmit = async (overrideUrl?: string) => {
+    const url = (overrideUrl ?? github).trim();
     if (!url) {
       setError("Please enter a GitHub repository URL.");
       return;
@@ -213,6 +225,23 @@ export default function SubmissionPage() {
               <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 9, background: "color-mix(in oklch, var(--bad) 12%, transparent)", border: "1px solid color-mix(in oklch, var(--bad) 30%, transparent)", color: "var(--bad)", fontSize: 13.5 }}>
                 <Icon name="zap" size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />
                 {error}
+              </div>
+            )}
+
+            {mission && SAMPLE_REPOS[mission.career_id] && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                <span style={{ fontSize: 12.5, color: "var(--muted)" }}>No repo handy?</span>
+                {SAMPLE_REPOS[mission.career_id].map((sample) => (
+                  <Button
+                    key={sample.url}
+                    variant="outline"
+                    size="sm"
+                    icon="git"
+                    onClick={() => { setGithub(sample.url); setError(null); handleSubmit(sample.url); }}
+                  >
+                    {sample.label}
+                  </Button>
+                ))}
               </div>
             )}
 

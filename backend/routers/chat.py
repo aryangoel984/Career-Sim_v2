@@ -53,7 +53,7 @@ async def chat_endpoint(request: ChatRequest, user_id: str = Depends(verify_toke
         async def event_generator():
             try:
                 chat_completion = await client.chat.completions.create(
-                    model="qwen/qwen3.6-27b",
+                    model="openai/gpt-oss-120b",
                     messages=api_messages,
                     max_tokens=1000,
                     stream=True,

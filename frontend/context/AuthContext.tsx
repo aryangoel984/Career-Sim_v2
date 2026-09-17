@@ -14,8 +14,10 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isDemo: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (fullName: string, email: string, password: string) => Promise<void>;
+  loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -24,6 +26,7 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isDemo, setIsDemo] = useState(false);
 
   useEffect(() => {
     // Restore session from localStorage on every page load.
@@ -32,6 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = authStorage.getToken();
     if (storedUser && token) {
       setUser(storedUser as User);
+      setIsDemo(authStorage.getIsDemo());
     }
     setLoading(false);
   }, []);
@@ -65,7 +69,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authStorage.setRefreshToken(data.refresh_token);
     }
     authStorage.setUser(data.user);
+    authStorage.setIsDemo(false);
     setUser(data.user);
+    setIsDemo(false);
+  };
+
+  const loginAsGuest = async () => {
+    // Credentials never touch the client — the backend reads them from its
+    // own env vars and signs in to the fixed demo Supabase user server-side.
+    const res = await api.post("/api/auth/demo-login", {});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Guest login failed");
+
+    authStorage.setToken(data.access_token);
+    if (data.refresh_token) {
+      authStorage.setRefreshToken(data.refresh_token);
+    }
+    authStorage.setUser(data.user);
+    authStorage.setIsDemo(true);
+    setUser(data.user);
+    setIsDemo(true);
   };
 
   const logout = async () => {
@@ -76,11 +99,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     authStorage.clear();
     setUser(null);
+    setIsDemo(false);
     window.location.href = "/";
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, loading, isDemo, login, signup, loginAsGuest, logout }}>
       {children}
     </AuthContext.Provider>
   );

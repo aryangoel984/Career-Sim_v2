@@ -102,10 +102,10 @@ async def review_endpoint(request: ReviewRequest, user_id: str = Depends(verify_
     print(f"[review] Step 2 DONE — system={len(system_prompt)} chars, user_msg={len(user_message):,} chars")
 
     # 3. Call Groq — non-streaming, wait for the full response
-    print(f"[review] Step 3 — Calling Groq (qwen3.6-27b, non-streaming)...")
+    print(f"[review] Step 3 — Calling Groq (gpt-oss-120b, non-streaming)...")
     try:
         completion = await client.chat.completions.create(
-            model="qwen/qwen3.6-27b",
+            model="openai/gpt-oss-120b",
             messages=[
                 {
                     "role": "system",

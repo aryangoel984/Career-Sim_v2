@@ -1,0 +1,34 @@
+name: Reset demo user
+
+# Keeps the "Continue as Guest" account clean by periodically restoring its
+# seeded profile/skills/review/report data. Calls the backend's own
+# POST /api/admin/demo/reset (backend/routers/admin.py), which reuses the
+# exact seed logic in backend/services/demo_seed.py.
+#
+# Requires two repo secrets:
+#   BACKEND_URL  — e.g. https://careersim-backend.up.railway.app
+#   CRON_SECRET  — must match the backend's CRON_SECRET env var
+
+on:
+  schedule:
+    - cron: "0 */4 * * *" # every 4 hours
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call demo reset endpoint
+        run: |
+          status=$(curl -s -o /tmp/resp.json -w "%{http_code}" -X POST \
+            "${BACKEND_URL%/}/api/admin/demo/reset" \
+            -H "X-Cron-Secret: ${CRON_SECRET}")
+          echo "HTTP $status"
+          cat /tmp/resp.json
+          if [ "$status" -ge 300 ]; then
+            echo "Demo reset failed"
+            exit 1
+          fi
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}

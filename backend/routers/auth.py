@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from models.schemas import SignupRequest, LoginRequest
@@ -64,6 +65,46 @@ async def login(request: LoginRequest):
             "email": response.user.email,
             "full_name": response.user.user_metadata.get("full_name", ""),
         },
+    }
+
+
+@router.post("/api/auth/demo-login")
+async def demo_login():
+    """
+    Signs in to the fixed demo/guest account for recruiter previews.
+
+    Credentials are never sent from the client — they live only in this
+    process's environment, so the browser has no way to discover or reuse
+    them. The demo account is just a normal Supabase user whose data is
+    reset on a schedule (see services/demo_seed.py), so RLS applies to it
+    exactly as it would to any other user.
+    """
+    demo_email = os.getenv("DEMO_USER_EMAIL")
+    demo_password = os.getenv("DEMO_USER_PASSWORD")
+    if not demo_email or not demo_password:
+        raise HTTPException(status_code=503, detail="Guest preview is not configured")
+
+    supabase = get_supabase()
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": demo_email,
+            "password": demo_password,
+        })
+    except Exception:
+        raise HTTPException(status_code=503, detail="Guest preview is temporarily unavailable")
+
+    if response.user is None or response.session is None:
+        raise HTTPException(status_code=503, detail="Guest preview is temporarily unavailable")
+
+    return {
+        "access_token": response.session.access_token,
+        "refresh_token": response.session.refresh_token,
+        "user": {
+            "id": response.user.id,
+            "email": response.user.email,
+            "full_name": response.user.user_metadata.get("full_name", ""),
+        },
+        "is_demo": True,
     }
 
 

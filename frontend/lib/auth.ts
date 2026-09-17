@@ -36,10 +36,23 @@ export const authStorage = {
     localStorage.removeItem("careersim_user");
   },
 
+  getIsDemo: (): boolean => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("careersim_is_demo") === "1";
+  },
+  setIsDemo: (isDemo: boolean) => {
+    if (isDemo) {
+      localStorage.setItem("careersim_is_demo", "1");
+    } else {
+      localStorage.removeItem("careersim_is_demo");
+    }
+  },
+
   clear: () => {
     localStorage.removeItem("careersim_token");
     localStorage.removeItem("careersim_refresh_token");
     localStorage.removeItem("careersim_user");
+    localStorage.removeItem("careersim_is_demo");
     // Also clear per-session review data so a different user logging in
     // on the same browser doesn't see the previous user's review/passport
     localStorage.removeItem("careersim_review");

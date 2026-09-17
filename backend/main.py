@@ -8,6 +8,7 @@ from routers.skills import router as skills_router
 from routers.profile import router as profile_router
 from routers.mission import router as mission_router
 from routers.report import router as report_router
+from routers.admin import router as admin_router
 
 app = FastAPI(title="CareerSim AI Backend")
 
@@ -43,6 +44,7 @@ app.include_router(skills_router)
 app.include_router(profile_router)
 app.include_router(mission_router)
 app.include_router(report_router)
+app.include_router(admin_router)
 
 @app.get("/health")
 async def health_check():

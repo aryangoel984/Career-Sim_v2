@@ -49,11 +49,28 @@ def _parse_github_url(url: str) -> tuple[str, str]:
 
 
 def _get(url: str) -> dict:
-    """Make a GET request to the GitHub API and return parsed JSON."""
+    """
+    Make a GET request to the GitHub API and return parsed JSON.
+
+    If a GITHUB_TOKEN is configured but GitHub rejects it (401 — expired,
+    revoked, or malformed), transparently retry once without auth instead
+    of failing the whole request. Public repos work fine unauthenticated
+    (just at a lower rate limit), so a bad token should never block a
+    submission review for anyone, demo account included.
+    """
     print(f"  [GitHub] GET {url}")
-    req = urllib.request.Request(url, headers=_build_headers())
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    headers = _build_headers()
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        if e.code == 401 and "Authorization" in headers:
+            print("  [GitHub] 401 with GITHUB_TOKEN — token invalid/expired, retrying unauthenticated")
+            fallback_req = urllib.request.Request(url, headers={"User-Agent": "CareerSim-AI"})
+            with urllib.request.urlopen(fallback_req, timeout=15) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        raise
 
 
 def _should_include(path: str) -> bool:

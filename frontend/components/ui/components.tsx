@@ -263,6 +263,31 @@ export function Logo({ size = 28, onClick }: LogoProps) {
   );
 }
 
+/* ---- Demo mode banner ---- */
+export function DemoBanner() {
+  const { isDemo } = useAuth();
+
+  // Flag the banner's presence on <html> so globals.css can push the fixed
+  // nav bar and page content down without every page needing to know about it.
+  useEffect(() => {
+    if (isDemo) {
+      document.documentElement.setAttribute("data-demo", "true");
+    } else {
+      document.documentElement.removeAttribute("data-demo");
+    }
+    return () => document.documentElement.removeAttribute("data-demo");
+  }, [isDemo]);
+
+  if (!isDemo) return null;
+
+  return (
+    <div className="demo-banner">
+      <Icon name="sparkles" size={13} />
+      <span>Demo Mode — recruiter preview, data resets periodically.</span>
+    </div>
+  );
+}
+
 /* ---- App nav bar ---- */
 export function AppNav() {
   const pathname = usePathname();
