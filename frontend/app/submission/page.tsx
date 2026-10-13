@@ -268,7 +268,7 @@ export default function SubmissionPage() {
             </label>
 
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 24 }}>
-              <Button variant="primary" size="lg" icon="cpu" onClick={handleSubmit}>Submit for AI review</Button>
+              <Button variant="primary" size="lg" icon="cpu" onClick={() => handleSubmit()}>Submit for AI review</Button>
               <Button variant="ghost" size="lg" onClick={() => router.push("/mission")}>Back to mission</Button>
             </div>
           </Card>
