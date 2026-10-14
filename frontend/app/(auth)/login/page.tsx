@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { Icon, Button, Logo } from "@/components/ui/components";
 import { api } from "@/lib/api";
-import { redirectAfterAuth } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -48,9 +47,10 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email.trim(), password);
-      redirectAfterAuth("/dashboard");
+      router.push("/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Login failed. Try again.");
+    } finally {
       setLoading(false);
     }
   };
@@ -60,7 +60,7 @@ export default function LoginPage() {
     setGuestLoading(true);
     try {
       await loginAsGuest();
-      redirectAfterAuth("/dashboard");
+      router.push("/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Guest preview is unavailable right now.");
       setGuestLoading(false);
