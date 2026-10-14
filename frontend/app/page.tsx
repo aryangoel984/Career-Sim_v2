@@ -42,8 +42,55 @@ function LandingNav() {
   );
 }
 
+const DEMO_VIDEO_ID = "1RWMBphTmPhUpLmafklLo75bUCPSfrSB3";
+
+function DemoVideoModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="video-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="CareerSim AI demo video">
+      <div className="video-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="video-head">
+          <span style={{ fontWeight: 600 }}>CareerSim AI — Product Demo</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <a
+              href={`https://drive.google.com/file/d/${DEMO_VIDEO_ID}/view`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--text-dim)", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none" }}
+            >
+              <Icon name="link" size={14} /> Open in Google Drive
+            </a>
+            <button className="video-close" onClick={onClose} aria-label="Close demo video">
+              <Icon name="x" size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="video-frame">
+          <iframe
+            src={`https://drive.google.com/file/d/${DEMO_VIDEO_ID}/preview`}
+            title="CareerSim AI demo video"
+            allow="autoplay; fullscreen"
+            allowFullScreen
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Hero() {
   const router = useRouter();
+  const [demoOpen, setDemoOpen] = useState(false);
   return (
     <section className="hero">
       <div className="page">
@@ -64,9 +111,10 @@ function Hero() {
         <Reveal delay={240}>
           <div className="hero-cta">
             <Button variant="primary" size="lg" icon="play" onClick={() => router.push("/careers")}>Start Simulation</Button>
-            <Button variant="outline" size="lg" icon="message" onClick={() => router.push("/simulation")}>Watch Demo</Button>
+            <Button variant="outline" size="lg" icon="message" onClick={() => setDemoOpen(true)}>Watch Demo</Button>
           </div>
         </Reveal>
+        {demoOpen && <DemoVideoModal onClose={() => setDemoOpen(false)} />}
         <Reveal delay={340}>
           <HeroPreview />
         </Reveal>
