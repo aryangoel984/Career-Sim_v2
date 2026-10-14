@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { Icon, Button, Logo } from "@/components/ui/components";
+import { redirectAfterAuth } from "@/lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -26,10 +27,9 @@ export default function SignupPage() {
     setLoading(true);
     try {
       await signup(fullName.trim(), email.trim(), password);
-      router.push("/careers");
+      redirectAfterAuth("/careers");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Signup failed. Try again.");
-    } finally {
       setLoading(false);
     }
   };

@@ -1,3 +1,12 @@
+// Hard navigation is required after login/signup: routes prefetched while logged
+// out hold the middleware's /login redirect in Next's client router cache, and a
+// soft router.push would replay that stale redirect.
+export function redirectAfterAuth(fallback: string) {
+  const from = new URLSearchParams(window.location.search).get("from");
+  const safe = from && from.startsWith("/") && !from.startsWith("//") ? from : fallback;
+  window.location.assign(safe);
+}
+
 export const authStorage = {
   getToken: (): string | null => {
     if (typeof window === "undefined") return null;
